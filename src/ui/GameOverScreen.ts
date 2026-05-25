@@ -1,174 +1,56 @@
 // src/ui/GameOverScreen.ts
-const GOLD_ACCENT = "#c9a84c";
-const BACKGROUND_COLOR = "#0a0a1a";
-const SECONDS_PER_MINUTE = 60;
-
-export type GameOverResult = {
-  victory: boolean;
-  kills: number;
-  deaths: number;
-  durationSeconds: number;
-};
-
-type PlayAgainCallback = () => void;
+export interface GameOverStats {
+  kills: number
+  deaths: number
+  duration: number
+}
 
 export class GameOverScreen {
-  private root: HTMLElement | null;
-  private overlay: HTMLElement | null;
-  private title: HTMLElement | null;
-  private summary: HTMLElement | null;
-  private playAgainCallback: PlayAgainCallback | null;
+  private readonly el: HTMLElement
+  private replayCallback: (() => void) | null = null
 
   public constructor() {
-    this.root = null;
-    this.overlay = null;
-    this.title = null;
-    this.summary = null;
-    this.playAgainCallback = null;
+    this.el = document.createElement('div')
+    this.el.id = 'game-over'
+    this.el.style.cssText =
+      'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);' +
+      'z-index:100;flex-direction:column;align-items:center;justify-content:center;' +
+      "font-family:'Cinzel',serif;color:#c9a84c;"
+    this.el.innerHTML = `
+      <h1 id="go-title" style="font-size:3rem;margin-bottom:1rem;letter-spacing:.2em;text-shadow:0 0 30px #c9a84c88"></h1>
+      <p id="go-sub" style="font-size:1rem;color:#aaa;margin-bottom:2rem"></p>
+      <button id="go-btn" style="
+        padding:12px 40px;border:2px solid #c9a84c;background:transparent;
+        color:#c9a84c;font-family:'Cinzel',serif;font-size:1rem;
+        cursor:pointer;letter-spacing:.1em;">PLAY AGAIN</button>
+    `
+    document.body.appendChild(this.el)
+    const btn = this.el.querySelector<HTMLButtonElement>('#go-btn')
+    btn?.addEventListener('click', () => this.replayCallback?.())
+    btn?.addEventListener('mouseenter', () => { if (btn) btn.style.background = '#c9a84c22' })
+    btn?.addEventListener('mouseleave', () => { if (btn) btn.style.background = 'transparent' })
   }
 
-  /**
-   * Mounts the game-over overlay into the provided DOM root.
-   */
-  public mount(root: HTMLElement): void {
-    this.root = root;
-    this.injectStyles();
-
-    const overlay = document.createElement("section");
-    overlay.className = "bb-game-over";
-    overlay.hidden = true;
-
-    const panel = document.createElement("div");
-    panel.className = "bb-game-over-panel";
-
-    this.title = document.createElement("h2");
-    this.summary = document.createElement("p");
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "bb-game-over-button";
-    button.textContent = "PLAY AGAIN";
-    button.addEventListener("click", () => {
-      this.playAgainCallback?.();
-    });
-
-    panel.append(this.title, this.summary, button);
-    overlay.append(panel);
-    root.append(overlay);
-    this.overlay = overlay;
-  }
-
-  /**
-   * Displays victory or defeat with match statistics.
-   */
-  public show(result: GameOverResult): void {
-    if (!this.overlay || !this.title || !this.summary) {
-      return;
+  public show(isVictory: boolean, stats: GameOverStats): void {
+    const title = this.el.querySelector<HTMLElement>('#go-title')
+    const sub = this.el.querySelector<HTMLElement>('#go-sub')
+    if (title) {
+      title.textContent = isVictory ? 'VICTORY' : 'DEFEAT'
+      title.style.color = isVictory ? '#c9a84c' : '#d64b4b'
     }
-
-    this.overlay.hidden = false;
-    this.overlay.style.pointerEvents = "auto";
-    this.title.textContent = result.victory ? "Victory" : "Defeat";
-    this.title.className = result.victory ? "is-victory" : "is-defeat";
-    this.summary.textContent = `Kills ${result.kills} | Deaths ${result.deaths} | Time ${this.formatTime(result.durationSeconds)}`;
+    if (sub) {
+      const mins = Math.floor(stats.duration / 60)
+      const secs = String(stats.duration % 60).padStart(2, '0')
+      sub.textContent = `K/D: ${stats.kills}/${stats.deaths} · ${mins}:${secs}`
+    }
+    this.el.style.display = 'flex'
   }
 
-  /**
-   * Hides the overlay.
-   */
+  public onReplay(callback: () => void): void {
+    this.replayCallback = callback
+  }
+
   public hide(): void {
-    if (!this.overlay) {
-      return;
-    }
-
-    this.overlay.hidden = true;
-    this.overlay.style.pointerEvents = "none";
-  }
-
-  /**
-   * Registers the play-again button action.
-   */
-  public onPlayAgain(callback: PlayAgainCallback): void {
-    this.playAgainCallback = callback;
-  }
-
-  private formatTime(seconds: number): string {
-    const minutes = Math.floor(seconds / SECONDS_PER_MINUTE);
-    const remaining = Math.floor(seconds % SECONDS_PER_MINUTE);
-    return `${minutes.toString().padStart(2, "0")}:${remaining.toString().padStart(2, "0")}`;
-  }
-
-  private injectStyles(): void {
-    if (document.getElementById("bb-game-over-styles")) {
-      return;
-    }
-
-    const style = document.createElement("style");
-    style.id = "bb-game-over-styles";
-    style.textContent = `
-      .bb-game-over {
-        position: fixed;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        padding: 24px;
-        background:
-          radial-gradient(circle at 50% 18%, rgba(201, 168, 76, 0.14), transparent 30%),
-          rgba(10, 10, 26, 0.9);
-        color: #f4ead7;
-        pointer-events: auto;
-        z-index: 10;
-      }
-
-      .bb-game-over[hidden] {
-        display: none;
-      }
-
-      .bb-game-over-panel {
-        width: min(520px, 100%);
-        padding: 34px 28px;
-        border: 1px solid rgba(201, 168, 76, 0.5);
-        background: linear-gradient(180deg, #151827, ${BACKGROUND_COLOR});
-        text-align: center;
-        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
-      }
-
-      .bb-game-over h2 {
-        margin: 0;
-        font-family: Cinzel, serif;
-        font-size: clamp(48px, 10vw, 88px);
-        letter-spacing: 0;
-      }
-
-      .bb-game-over h2.is-victory {
-        color: ${GOLD_ACCENT};
-      }
-
-      .bb-game-over h2.is-defeat {
-        color: #d64b4b;
-      }
-
-      .bb-game-over p {
-        margin: 14px 0 28px;
-        color: rgba(244, 234, 215, 0.78);
-        font-weight: 700;
-      }
-
-      .bb-game-over-button {
-        width: min(240px, 100%);
-        height: 48px;
-        border: 1px solid ${GOLD_ACCENT};
-        background: #1c1a21;
-        color: ${GOLD_ACCENT};
-        font-family: Cinzel, serif;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .bb-game-over-button:hover {
-        background: #24202a;
-      }
-    `;
-    document.head.append(style);
+    this.el.style.display = 'none'
   }
 }

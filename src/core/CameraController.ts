@@ -1,48 +1,35 @@
 // src/core/CameraController.ts
-import { OrthographicCamera, Vector3 } from "three";
-import { CAMERA_CONFIG } from "@/config/constants";
-import type { Entity } from "@/entities/Entity";
+import { OrthographicCamera, Vector3 } from 'three'
+import type { Hero } from '@/entities/Hero'
 
-const FOLLOW_LERP_SPEED = 5;
+const LERP_SPEED = 4
+const CAMERA_OFFSET = new Vector3(20, 20, 20)
 
 export class CameraController {
-  private readonly camera: OrthographicCamera;
-  private readonly offset: Vector3;
-  private readonly desiredPosition: Vector3;
-  private readonly lookTarget: Vector3;
-  private target: Entity | null;
+  private readonly camera: OrthographicCamera
+  private target: Hero | null = null
+  private readonly offset: Vector3
 
   public constructor(camera: OrthographicCamera) {
-    this.camera = camera;
-    this.offset = CAMERA_CONFIG.position.clone();
-    this.desiredPosition = new Vector3();
-    this.lookTarget = new Vector3();
-    this.target = null;
+    this.camera = camera
+    this.offset = CAMERA_OFFSET.clone()
   }
 
-  /**
-   * Sets the entity that the camera should smoothly follow.
-   */
-  public setTarget(target: Entity | null): void {
-    this.target = target;
-    if (target) {
-      this.desiredPosition.copy(target.position).add(this.offset);
-      this.camera.position.copy(this.desiredPosition);
-      this.camera.lookAt(target.position);
-    }
+  /** Set hero yang diikuti kamera */
+  public setTarget(hero: Hero): void {
+    this.target = hero
   }
 
-  /**
-   * Updates camera position and look target for the current render frame.
-   */
+  /** Panggil setiap tick dari updateHud interval */
   public update(delta: number): void {
-    if (!this.target) {
-      return;
-    }
-
-    this.lookTarget.copy(this.target.position);
-    this.desiredPosition.copy(this.lookTarget).add(this.offset);
-    this.camera.position.lerp(this.desiredPosition, Math.min(1, FOLLOW_LERP_SPEED * delta));
-    this.camera.lookAt(this.lookTarget);
+    if (!this.target) return
+    const heroPos = this.target.position
+    const desired = new Vector3(
+      heroPos.x + this.offset.x,
+      heroPos.y + this.offset.y,
+      heroPos.z + this.offset.z
+    )
+    this.camera.position.lerp(desired, LERP_SPEED * delta)
+    this.camera.lookAt(heroPos.clone())
   }
 }

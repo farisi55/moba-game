@@ -7,6 +7,7 @@ import { eventBus } from "@/core/EventBus";
 import { GameEngine } from "@/core/GameEngine";
 import { InputManager, type InputAction } from "@/core/InputManager";
 import type { AIComponent, MovementComponent } from "@/entities/components";
+import type { Entity } from "@/entities/Entity";
 import { Hero } from "@/entities/Hero";
 import { Tower } from "@/entities/Tower";
 import { GameMap } from "@/map/GameMap";
@@ -26,9 +27,6 @@ import { LaneType, Team, type PlayerState, type Vec3 } from "@/types";
 
 const SKILL_KEYS = ["q", "w", "e", "r"] as const;
 const PLAYER_NAME = "Guest";
-const TOWERS_DESTROYED_TO_END_MATCH = 6;
-const BOT_LANES = [LaneType.TOP, LaneType.MID, LaneType.BOT] as const;
-const BOT_HERO_IDS = ["shadowblade", "stormcaller", "ironclad"] as const;
 
 function getElement(id: string): HTMLElement {
   const element = document.getElementById(id);
@@ -61,23 +59,18 @@ const gameMap = new GameMap(engine.getScene());
 const input = InputManager.getInstance();
 input.configure(engine.getRenderer().domElement, engine.getCamera());
 
-const cameraController = new CameraController(engine.getCamera());
 const hud = new HUD();
 hud.mount(uiOverlay);
-const healthBarOverlay = new HealthBarOverlay(engine.getCamera(), engine.getRenderer());
-healthBarOverlay.mount(uiOverlay);
 const lobby = new LobbyScreen();
 lobby.mount(lobbyRoot);
-const gameOverScreen = new GameOverScreen();
-gameOverScreen.mount(uiOverlay);
 const network = new NetworkStub();
-const remoteHeroes = new Map<string, Hero>();
+const cameraController = new CameraController(engine.getCamera());
 const respawnSystem = new RespawnSystem();
+const healthBarOverlay = new HealthBarOverlay(uiOverlay, engine.getCamera());
+const gameOverScreen = new GameOverScreen();
+const remoteHeroes = new Map<string, Hero>();
 let localHero: Hero | null = null;
 let objectivesSpawned = false;
-let botsSpawned = false;
-let destroyedTowerCount = 0;
-let matchEnded = false;
 
 const laneManager = new LaneManager(gameMap, (entity) => engine.addEntity(entity));
 engine.addSystem(new PlayerInputSystem(input, () => localHero));
@@ -86,10 +79,6 @@ engine.addSystem(new MovementSystem());
 engine.addSystem(new CombatSystem());
 engine.addSystem(respawnSystem);
 engine.addSystem(laneManager);
-engine.addFrameCallback((delta) => {
-  cameraController.update(delta);
-  healthBarOverlay.update(engine.getEntities());
-});
 
 function spawnObjectives(): void {
   if (objectivesSpawned) {
@@ -149,21 +138,17 @@ function addBotAI(hero: Hero, lane: LaneType): void {
 }
 
 function spawnBots(): void {
-  if (botsSpawned) {
-    return;
-  }
-
-  botsSpawned = true;
-  for (let index = 0; index < BOT_LANES.length; index += 1) {
-    const lane = BOT_LANES[index];
-    const heroId = BOT_HERO_IDS[index] ?? BOT_HERO_IDS[0];
-    const spawnPoint = gameMap.getSpawnPoint(Team.RED).clone().add(new Vector3(index * 1.4, 0, -index * 1.4));
-    const botHero = createHero(heroId, Team.RED, spawnPoint);
-    addBotAI(botHero, lane);
-    respawnSystem.registerHero(botHero, spawnPoint);
-    remoteHeroes.set(botHero.id, botHero);
-    engine.addEntity(botHero);
-    useGameStore.getState().updatePlayer(createPlayer(botHero.id, heroId, Team.RED, `Bot ${index + 1}`, spawnPoint));
+  const botConfigs: Array<{ heroId: string; lane: LaneType }> = [
+    { heroId: "shadowblade", lane: LaneType.TOP },
+    { heroId: "ironclad",    lane: LaneType.MID },
+    { heroId: "stormcaller", lane: LaneType.BOT }
+  ];
+  for (const cfg of botConfigs) {
+    const spawnPoint = gameMap.getSpawnPoint(Team.RED);
+    const bot = createHero(cfg.heroId, Team.RED, spawnPoint);
+    addBotAI(bot, cfg.lane);
+    engine.addEntity(bot);
+    respawnSystem.registerHero(bot, spawnPoint);
   }
 }
 
@@ -212,12 +197,12 @@ function handleInput(action: InputAction): void {
 
 function startMatch(heroId: string): void {
   spawnObjectives();
-  spawnBots();
   const spawnPoint = gameMap.getSpawnPoint(Team.BLUE);
   localHero = createHero(heroId, Team.BLUE, spawnPoint);
   engine.addEntity(localHero);
-  respawnSystem.registerHero(localHero, spawnPoint);
   cameraController.setTarget(localHero);
+  respawnSystem.registerHero(localHero, spawnPoint);
+  spawnBots();
   hud.setHero(localHero);
 
   const localPlayer = createPlayer(localHero.id, heroId, Team.BLUE, PLAYER_NAME, spawnPoint);
@@ -253,6 +238,8 @@ function updateHud(): void {
   const state = useGameStore.getState();
   const localPlayer = state.localPlayer;
   hud.update(state.matchTimer, localPlayer?.kills ?? 0, localPlayer?.deaths ?? 0);
+  cameraController.update(UI_CONFIG.hudRefreshMs / TIME_CONFIG.millisecondsPerSecond);
+  healthBarOverlay.update(engine.getEntities() as Entity[]);
 }
 
 input.onAction(handleInput);
@@ -283,43 +270,24 @@ eventBus.on("HERO_DIED", (event) => {
   }
 });
 
+const TOWERS_TO_WIN = 6;
 eventBus.on("TOWER_DESTROYED", (event) => {
-  if (matchEnded) {
-    return;
-  }
-
   const state = useGameStore.getState();
-  const nextScores = {
+  const isVictory = event.team === Team.RED;
+  const newScores = {
     blue: event.team === Team.RED ? state.scores.blue + 1 : state.scores.blue,
     red: event.team === Team.BLUE ? state.scores.red + 1 : state.scores.red
   };
-  state.setScores(nextScores);
-  destroyedTowerCount += 1;
-
-  if (destroyedTowerCount >= TOWERS_DESTROYED_TO_END_MATCH) {
-    const winner = event.team === Team.RED ? Team.BLUE : Team.RED;
-    eventBus.emit("MATCH_ENDED", {
-      winner,
-      reason: "Six towers destroyed"
+  state.setScores(newScores);
+  if (newScores.blue >= TOWERS_TO_WIN || newScores.red >= TOWERS_TO_WIN) {
+    engine.stop();
+    const lp = state.localPlayer;
+    gameOverScreen.show(isVictory, {
+      kills: lp?.kills ?? 0,
+      deaths: lp?.deaths ?? 0,
+      duration: Math.floor(state.matchTimer)
     });
   }
-});
-
-eventBus.on("MATCH_ENDED", (event) => {
-  if (matchEnded) {
-    return;
-  }
-
-  matchEnded = true;
-  const state = useGameStore.getState();
-  const localPlayer = state.localPlayer;
-  state.setMatchState("ENDED");
-  gameOverScreen.show({
-    victory: event.winner === localPlayer?.team,
-    kills: localPlayer?.kills ?? 0,
-    deaths: localPlayer?.deaths ?? 0,
-    durationSeconds: state.matchTimer
-  });
 });
 
 window.addEventListener("resize", () => {
@@ -327,4 +295,4 @@ window.addEventListener("resize", () => {
 });
 
 window.setInterval(updateHud, UI_CONFIG.hudRefreshMs);
-gameOverScreen.onPlayAgain(() => window.location.reload());
+gameOverScreen.onReplay(() => { window.location.reload(); });

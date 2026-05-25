@@ -40,11 +40,6 @@ export const FOG_CONFIG = {
   density: 0.008
 } as const;
 
-export const RESPAWN_CONFIG = {
-  heroRespawnSeconds: 8,
-  baseDamageToWin: true
-} as const;
-
 export const GAME_LOOP = {
   fixedDelta: 1 / 60,
   maxFrameDelta: 0.25
@@ -221,3 +216,7 @@ export const INPUT_CONFIG = {
 export const TIME_CONFIG = {
   millisecondsPerSecond: 1000
 } as const;
+
+export const RESPAWN_CONFIG = {
+  heroRespawnSeconds: 8
+} as const

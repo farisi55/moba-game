@@ -1,104 +1,69 @@
 // src/systems/RespawnSystem.ts
-import type {
-  HealthComponent,
-  LifecycleComponent,
-  MovementComponent,
-  StateComponent
-} from "@/entities/components";
-import type { Entity } from "@/entities/Entity";
-import { Hero, HeroState } from "@/entities/Hero";
-import { RESPAWN_CONFIG } from "@/config/constants";
-import type { System } from "@/types";
-import { Vector3 } from "three";
+import { Vector3 } from 'three'
+import { RESPAWN_CONFIG } from '@/config/constants'
+import type { HealthComponent, LifecycleComponent, MovementComponent, StateComponent } from '@/entities/components'
+import { Hero, HeroState } from '@/entities/Hero'
+import type { Entity } from '@/entities/Entity'
+import type { System } from '@/types'
 
-type RespawnRegistration = {
-  spawnPoint: Vector3;
-  remainingSeconds: number;
-  isCounting: boolean;
-};
+interface RespawnEntry {
+  hero: Hero
+  timer: number
+  spawnPoint: Vector3
+}
 
 export class RespawnSystem implements System {
-  private readonly registrations: Map<string, RespawnRegistration>;
+  private readonly queue: RespawnEntry[] = []
 
-  public constructor() {
-    this.registrations = new Map<string, RespawnRegistration>();
-  }
-
-  /**
-   * Registers a hero spawn point without retaining the hero object.
-   */
+  /** Register hero agar otomatis respawn saat mati */
   public registerHero(hero: Hero, spawnPoint: Vector3): void {
-    if (this.registrations.has(hero.id)) {
-      return;
-    }
-
-    this.registrations.set(hero.id, {
-      spawnPoint: spawnPoint.clone(),
-      remainingSeconds: RESPAWN_CONFIG.heroRespawnSeconds,
-      isCounting: false
-    });
+    if (this.queue.some((e) => e.hero.id === hero.id)) return
+    this.queue.push({
+      hero,
+      timer: RESPAWN_CONFIG.heroRespawnSeconds,
+      spawnPoint: spawnPoint.clone()
+    })
   }
 
-  /**
-   * Counts down dead registered heroes and respawns them at their spawn points.
-   */
-  public update(delta: number, entities: readonly Entity[]): void {
-    for (const entity of entities) {
-      const registration = this.registrations.get(entity.id);
-      if (!registration || !(entity instanceof Hero)) {
-        continue;
+  public update(delta: number, _entities: readonly Entity[]): void {
+    for (const entry of this.queue) {
+      const health = entry.hero.getComponent<HealthComponent>('health')
+      if (!health?.isDead) continue
+
+      entry.timer -= delta
+      if (entry.timer > 0) continue
+
+      // Reset health
+      health.isDead = false
+      health.hp = health.maxHp
+      entry.hero.stats.hp = health.maxHp
+      entry.hero.stats.mana = entry.hero.stats.maxMana
+      entry.hero.state = HeroState.IDLE
+
+      const state = entry.hero.getComponent<StateComponent>('state')
+      if (state) state.state = HeroState.IDLE
+
+      const movement = entry.hero.getComponent<MovementComponent>('movement')
+      if (movement) {
+        movement.targetPosition = null
+        movement.isMoving = false
       }
 
-      const health = entity.getComponent<HealthComponent>("health");
-      if (!health?.isDead) {
-        registration.isCounting = false;
-        registration.remainingSeconds = RESPAWN_CONFIG.heroRespawnSeconds;
-        continue;
+      const lifecycle = entry.hero.getComponent<LifecycleComponent>('lifecycle')
+      if (lifecycle) {
+        lifecycle.shouldDispose = false
+        lifecycle.disposed = false
       }
 
-      if (!registration.isCounting) {
-        registration.isCounting = true;
-        registration.remainingSeconds = RESPAWN_CONFIG.heroRespawnSeconds;
+      // Teleport ke spawn
+      entry.hero.position.copy(entry.spawnPoint)
+      if (entry.hero.mesh) {
+        entry.hero.mesh.position.copy(entry.spawnPoint)
+        entry.hero.mesh.visible = true
       }
 
-      registration.remainingSeconds -= delta;
-      if (registration.remainingSeconds <= 0) {
-        this.respawnHero(entity, registration.spawnPoint);
-        registration.isCounting = false;
-        registration.remainingSeconds = RESPAWN_CONFIG.heroRespawnSeconds;
-      }
-    }
-  }
-
-  private respawnHero(hero: Hero, spawnPoint: Vector3): void {
-    const health = hero.getComponent<HealthComponent>("health");
-    const movement = hero.getComponent<MovementComponent>("movement");
-    const state = hero.getComponent<StateComponent>("state");
-    const lifecycle = hero.getComponent<LifecycleComponent>("lifecycle");
-
-    if (health) {
-      health.hp = health.maxHp;
-      health.isDead = false;
-      hero.stats.hp = health.maxHp;
-    }
-    hero.stats.mana = hero.stats.maxMana;
-    hero.position.copy(spawnPoint);
-    hero.rotation.set(0, 0, 0);
-    hero.state = HeroState.IDLE;
-
-    if (movement) {
-      movement.targetPosition = null;
-      movement.isMoving = false;
-    }
-    if (state) {
-      state.state = HeroState.IDLE;
-    }
-    if (lifecycle) {
-      lifecycle.shouldDispose = false;
-      lifecycle.disposed = false;
-    }
-    if (hero.mesh) {
-      hero.mesh.visible = true;
+      // Reset timer untuk kematian berikutnya
+      entry.timer = RESPAWN_CONFIG.heroRespawnSeconds
     }
   }
 }
