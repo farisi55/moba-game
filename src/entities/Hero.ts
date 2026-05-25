@@ -1,13 +1,16 @@
 // src/entities/Hero.ts
 import {
-  BoxGeometry,
-  Mesh,
-  MeshStandardMaterial,
+  Group,
   Vector3
 } from "three";
-import { COLORS, COMBAT_CONFIG, ENTITY_CONFIG, HERO_PROGRESS, UI_CONFIG } from "@/config/constants";
+import { COLORS, COMBAT_CONFIG, HERO_PROGRESS, UI_CONFIG } from "@/config/constants";
 import { Entity } from "@/entities/Entity";
 import { disposeObject3D } from "@/entities/dispose";
+import {
+  buildAssassinModel,
+  buildMageModel,
+  buildTankModel
+} from "@/entities/heroModels";
 import type {
   HealthComponent,
   LifecycleComponent,
@@ -15,7 +18,7 @@ import type {
   StateComponent
 } from "@/entities/components";
 import type { Component, HeroConfig, SkillConfig } from "@/types";
-import { Team } from "@/types";
+import { HeroRole, Team } from "@/types";
 
 export interface HeroStats {
   hp: number;
@@ -58,8 +61,7 @@ export class Hero extends Entity {
   public readonly skills: Skill[];
   public readonly stats: HeroStats;
   public state: HeroState;
-  private readonly geometry: BoxGeometry;
-  private readonly material: MeshStandardMaterial;
+  private readonly modelGroup: Group;
 
   public constructor(config: HeroConfig, team: Team, position: Vector3 = new Vector3()) {
     super(position);
@@ -82,24 +84,19 @@ export class Hero extends Entity {
       cooldownRemaining: 0
     }));
 
-    this.geometry = new BoxGeometry(
-      ENTITY_CONFIG.heroWidth,
-      ENTITY_CONFIG.heroHeight,
-      ENTITY_CONFIG.heroDepth
-    );
-    this.material = new MeshStandardMaterial({
-      color: config.colorHex,
-      emissive: team === Team.BLUE ? COLORS.blueEmissive : COLORS.redEmissive,
-      emissiveIntensity: 0.2,
-      roughness: 0.7,
-      metalness: 0.15
-    });
+    const emissiveColor = team === Team.BLUE ? COLORS.blueEmissive : COLORS.redEmissive;
 
-    this.mesh = new Mesh(this.geometry, this.material);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
-    this.mesh.position.copy(this.position);
-    this.mesh.position.y = ENTITY_CONFIG.heroSpawnY;
+    if (config.role === HeroRole.TANK) {
+      this.modelGroup = buildTankModel(config.colorHex, emissiveColor);
+    } else if (config.role === HeroRole.ASSASSIN) {
+      this.modelGroup = buildAssassinModel(config.colorHex, emissiveColor);
+    } else {
+      this.modelGroup = buildMageModel(config.colorHex, emissiveColor);
+    }
+
+    this.modelGroup.position.copy(this.position);
+    this.modelGroup.position.y = 0;
+    this.mesh = this.modelGroup;
 
     this.addComponent({ type: "identity", kind: "hero" });
     this.addComponent({ type: "team", team });
@@ -243,8 +240,9 @@ export class Hero extends Entity {
     }
 
     if (this.mesh) {
-      this.mesh.position.copy(this.position);
-      this.mesh.position.y = ENTITY_CONFIG.heroSpawnY;
+      this.mesh.position.x = this.position.x;
+      this.mesh.position.z = this.position.z;
+      this.mesh.position.y = 0;
       this.mesh.rotation.copy(this.rotation);
       this.mesh.visible = this.state !== HeroState.DEAD;
     }
@@ -260,9 +258,6 @@ export class Hero extends Entity {
       this.mesh = null;
       return;
     }
-
-    this.geometry.dispose();
-    this.material.dispose();
   }
 
   private isHeroState(state: string): state is HeroState {

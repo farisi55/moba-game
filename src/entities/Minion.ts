@@ -1,13 +1,12 @@
 // src/entities/Minion.ts
 import {
-  BoxGeometry,
-  Mesh,
-  MeshStandardMaterial,
+  Group,
   Vector3
 } from "three";
-import { COLORS, COMBAT_CONFIG, ENTITY_CONFIG, MINION_STATS } from "@/config/constants";
+import { COLORS, COMBAT_CONFIG, MINION_STATS } from "@/config/constants";
 import { Entity } from "@/entities/Entity";
 import { disposeObject3D } from "@/entities/dispose";
+import { buildMinionModel } from "@/entities/minionModels";
 import type {
   HealthComponent,
   LifecycleComponent,
@@ -67,8 +66,7 @@ export class Minion extends Entity {
   };
   public targetId: string | null;
   public state: MinionState;
-  private readonly geometry: BoxGeometry;
-  private readonly material: MeshStandardMaterial;
+  private readonly modelGroup: Group;
 
   public constructor(type: MinionType, team: Team, position: Vector3 = new Vector3()) {
     super(position);
@@ -83,22 +81,12 @@ export class Minion extends Entity {
       moveSpeed: stats.moveSpeed
     };
 
-    this.geometry = new BoxGeometry(
-      ENTITY_CONFIG.minionWidth,
-      ENTITY_CONFIG.minionHeight,
-      ENTITY_CONFIG.minionDepth
-    );
-    this.material = new MeshStandardMaterial({
-      color: team === Team.BLUE ? COLORS.blueTeam : COLORS.redTeam,
-      roughness: 0.8,
-      metalness: 0.05
-    });
-
-    this.mesh = new Mesh(this.geometry, this.material);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
-    this.mesh.position.copy(this.position);
-    this.mesh.position.y = ENTITY_CONFIG.minionSpawnY;
+    const teamColor = team === Team.BLUE ? COLORS.blueTeam : COLORS.redTeam;
+    const emissiveColor = team === Team.BLUE ? COLORS.blueEmissive : COLORS.redEmissive;
+    this.modelGroup = buildMinionModel(type, teamColor, emissiveColor);
+    this.modelGroup.position.copy(position);
+    this.modelGroup.position.y = 0;
+    this.mesh = this.modelGroup;
 
     this.addComponent({ type: "identity", kind: "minion" });
     this.addComponent({ type: "team", team });
@@ -154,8 +142,9 @@ export class Minion extends Entity {
       this.targetId = combat.targetId;
     }
     if (this.mesh) {
-      this.mesh.position.copy(this.position);
-      this.mesh.position.y = ENTITY_CONFIG.minionSpawnY;
+      this.mesh.position.x = this.position.x;
+      this.mesh.position.z = this.position.z;
+      this.mesh.position.y = 0;
       this.mesh.rotation.copy(this.rotation);
       this.mesh.visible = this.state !== MinionState.DEAD;
     }
@@ -171,9 +160,6 @@ export class Minion extends Entity {
       this.mesh = null;
       return;
     }
-
-    this.geometry.dispose();
-    this.material.dispose();
   }
 
   private isMinionState(state: string): state is MinionState {
