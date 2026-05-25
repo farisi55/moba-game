@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy:pages": "npx wrangler pages deploy dist --project-name=browserbrawl"
   },
   "dependencies": {
     "@types/three": "^0.169.0",
