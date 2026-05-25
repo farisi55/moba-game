@@ -91,6 +91,12 @@ export class CombatSystem implements System {
 
     const damage = Math.max(COMBAT_CONFIG.minimumDamage, amount - targetHealth.defense);
     targetHealth.hp = Math.max(0, targetHealth.hp - damage);
+    eventBus.emit("DAMAGE_DEALT", {
+      targetId: target.id,
+      amount: Math.round(damage),
+      position: { x: target.position.x, y: target.position.y + 2, z: target.position.z },
+      isCrit: damage >= amount * 1.5
+    });
     if (targetHealth.hp > 0) {
       return;
     }

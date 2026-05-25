@@ -25,6 +25,12 @@ export type GameEventMap = {
     skillId: string;
     target: Vec3;
   };
+  DAMAGE_DEALT: {
+    targetId: string;
+    amount: number;
+    position: Vec3;
+    isCrit: boolean;
+  };
 };
 
 type EventCallback<TPayload> = (data: TPayload) => void;

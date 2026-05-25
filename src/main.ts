@@ -20,11 +20,14 @@ import { MovementSystem } from "@/systems/MovementSystem";
 import { PlayerInputSystem } from "@/systems/PlayerInputSystem";
 import { RespawnSystem } from "@/systems/RespawnSystem";
 import { ClickIndicator } from "@/ui/ClickIndicator";
+import { DamagePopup } from "@/ui/DamagePopup";
 import { GameOverScreen } from "@/ui/GameOverScreen";
 import { HealthBarOverlay } from "@/ui/HealthBarOverlay";
 import { HUD } from "@/ui/HUD";
 import { LobbyScreen } from "@/ui/LobbyScreen";
+import { Minimap } from "@/ui/Minimap";
 import { PlayerMarker } from "@/ui/PlayerMarker";
+import { SkillEffect } from "@/ui/SkillEffect";
 import { LaneType, Team, type PlayerState, type Vec3 } from "@/types";
 
 const SKILL_KEYS = ["q", "w", "e", "r"] as const;
@@ -70,6 +73,9 @@ const cameraController = new CameraController(engine.getCamera());
 const respawnSystem = new RespawnSystem();
 const healthBarOverlay = new HealthBarOverlay(uiOverlay, engine.getCamera());
 const gameOverScreen = new GameOverScreen();
+const damagePopup = new DamagePopup(uiOverlay, engine.getCamera());
+const skillEffect = new SkillEffect(engine.getScene());
+const minimap = new Minimap();
 const clickIndicator = new ClickIndicator(engine.getScene());
 const playerMarker = new PlayerMarker(engine.getScene());
 const remoteHeroes = new Map<string, Hero>();
@@ -168,6 +174,8 @@ function useLocalSkill(index: number): void {
     return;
   }
 
+  skillEffect.spawn(target);
+  hud.flashSkill(index);
   const targetPayload = toVec3(target);
   eventBus.emit("SKILL_USED", {
     heroId: localHero.id,
@@ -250,6 +258,12 @@ function updateHud(): void {
   healthBarOverlay.update(engine.getEntities() as Entity[]);
   playerMarker.update(UI_CONFIG.hudRefreshMs / TIME_CONFIG.millisecondsPerSecond);
   clickIndicator.update(UI_CONFIG.hudRefreshMs / TIME_CONFIG.millisecondsPerSecond);
+  damagePopup.update(UI_CONFIG.hudRefreshMs / TIME_CONFIG.millisecondsPerSecond);
+  skillEffect.update(UI_CONFIG.hudRefreshMs / TIME_CONFIG.millisecondsPerSecond);
+  minimap.update(
+    engine.getEntities() as Entity[],
+    localHero?.id ?? null
+  );
 }
 
 input.onAction(handleInput);
@@ -298,6 +312,11 @@ eventBus.on("TOWER_DESTROYED", (event) => {
       duration: Math.floor(state.matchTimer)
     });
   }
+});
+
+eventBus.on("DAMAGE_DEALT", (event) => {
+  const pos = new Vector3(event.position.x, event.position.y, event.position.z);
+  damagePopup.spawn(pos, event.amount, event.isCrit);
 });
 
 window.addEventListener("resize", () => {

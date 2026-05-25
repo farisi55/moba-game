@@ -144,6 +144,16 @@ export class HUD {
     };
   }
 
+  /** Flash a skill button when the player activates it */
+  public flashSkill(index: number): void {
+    const button = this.skillButtons[index];
+    if (!button) return;
+    button.classList.remove("bb-skill-active");
+    // Force reflow to restart animation
+    void button.offsetWidth;
+    button.classList.add("bb-skill-active");
+  }
+
   /**
    * Clears mounted HUD DOM.
    */
@@ -351,6 +361,14 @@ export class HUD {
           height: 64px;
           font-size: 22px;
         }
+      }
+
+      @keyframes bb-skill-flash {
+        0%   { box-shadow: inset 0 0 0 2px var(--bb-gold), 0 0 12px var(--bb-gold); background: rgba(201,168,76,0.25); }
+        100% { box-shadow: none; background: var(--bb-panel-solid); }
+      }
+      .bb-skill-active {
+        animation: bb-skill-flash 0.35s ease-out forwards;
       }
     `;
     document.head.append(style);

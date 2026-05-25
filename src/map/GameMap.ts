@@ -11,10 +11,6 @@ import {
 import { COLORS, MAP_CONFIG } from "@/config/constants";
 import { LaneType, Team } from "@/types";
 
-const GOLD_ACCENT = "#c9a84c";
-const CENTER_LANE_MARKER_SIZE = 0.22;
-const LANE_MARKER_HEIGHT = 0.04;
-
 export class GameMap {
   private readonly group: Group;
   private readonly lanes: Map<LaneType, Vector3[]>;
@@ -74,7 +70,7 @@ export class GameMap {
   private buildMap(): void {
     this.addGround();
     this.addRiver();
-    this.addLaneMarkers();
+    this.addLanePaths();
     this.addJungle();
     this.addBases();
   }
@@ -110,28 +106,64 @@ export class GameMap {
     this.disposableMeshes.push(river);
   }
 
-  private addLaneMarkers(): void {
-    const geometry = new BoxGeometry(CENTER_LANE_MARKER_SIZE, LANE_MARKER_HEIGHT, CENTER_LANE_MARKER_SIZE);
-    const material = new MeshStandardMaterial({
-      color: GOLD_ACCENT,
-      emissive: GOLD_ACCENT,
-      emissiveIntensity: 0.15,
+  private addLanePaths(): void {
+    const LANE_WIDTH = 2.8;
+    const LANE_Y = 0.008;
+
+    const laneMaterial = new MeshStandardMaterial({
+      color: "#3a4060",
+      roughness: 0.85,
+      metalness: 0.05
+    });
+    const edgeMaterial = new MeshStandardMaterial({
+      color: "#c9a84c",
+      emissive: "#c9a84c",
+      emissiveIntensity: 0.3,
       roughness: 0.8
     });
 
     for (const waypoints of this.lanes.values()) {
-      for (const waypoint of waypoints) {
-        const marker = new Mesh(geometry.clone(), material.clone());
-        marker.name = "LaneMarker";
-        marker.position.set(waypoint.x, LANE_MARKER_HEIGHT / 2, waypoint.z);
-        marker.receiveShadow = true;
-        this.group.add(marker);
-        this.disposableMeshes.push(marker);
+      for (let i = 0; i < waypoints.length - 1; i += 1) {
+        const a = waypoints[i];
+        const b = waypoints[i + 1];
+        if (!a || !b) continue;
+
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const length = Math.sqrt(dx * dx + dz * dz);
+        const angle = Math.atan2(dx, dz);
+        const midX = (a.x + b.x) / 2;
+        const midZ = (a.z + b.z) / 2;
+
+        // Main road strip
+        const roadGeo = new PlaneGeometry(LANE_WIDTH, length);
+        const road = new Mesh(roadGeo, laneMaterial.clone());
+        road.name = "LanePath";
+        road.rotation.x = -Math.PI / 2;
+        road.rotation.z = -angle;
+        road.position.set(midX, LANE_Y, midZ);
+        road.receiveShadow = true;
+        this.group.add(road);
+        this.disposableMeshes.push(road);
+
+        // Edge lines (gold)
+        for (const side of [-1, 1] as const) {
+          const edgeGeo = new PlaneGeometry(0.18, length);
+          const edge = new Mesh(edgeGeo, edgeMaterial.clone());
+          edge.name = "LaneEdge";
+          edge.rotation.x = -Math.PI / 2;
+          edge.rotation.z = -angle;
+          const perpX = Math.cos(angle) * side * (LANE_WIDTH / 2);
+          const perpZ = -Math.sin(angle) * side * (LANE_WIDTH / 2);
+          edge.position.set(midX + perpX, LANE_Y + 0.002, midZ + perpZ);
+          this.group.add(edge);
+          this.disposableMeshes.push(edge);
+        }
       }
     }
 
-    geometry.dispose();
-    material.dispose();
+    laneMaterial.dispose();
+    edgeMaterial.dispose();
   }
 
   private addJungle(): void {

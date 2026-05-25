@@ -3,10 +3,10 @@ import { Vector3 } from "three";
 
 export const COLORS = {
   background: "#0a0a1a",
-  ambientLight: "#1a1a3e",
-  directionalLight: "#4466ff",
-  ground: "#1a1f2e",
-  river: "#080f24",
+  ambientLight: "#6070a0",
+  directionalLight: "#ffffff",
+  ground: "#2a3050",
+  river: "#1a2848",
   jungleTree: "#13271d",
   blueTeam: "#3d7eff",
   redTeam: "#d64b4b",
@@ -219,4 +219,11 @@ export const TIME_CONFIG = {
 
 export const RESPAWN_CONFIG = {
   heroRespawnSeconds: 8
+} as const
+
+export const DAMAGE_NUMBER_CONFIG = {
+  riseSpeed: 2.2,
+  lifetime: 1.1,
+  fontSize: '14px',
+  critFontSize: '18px',
 } as const
