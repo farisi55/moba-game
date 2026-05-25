@@ -2,6 +2,7 @@
 import { Vector3 } from "three";
 import { TIME_CONFIG, UI_CONFIG } from "@/config/constants";
 import { HERO_CONFIGS } from "@/config/heroes";
+import { CameraController } from "@/core/CameraController";
 import { eventBus } from "@/core/EventBus";
 import { GameEngine } from "@/core/GameEngine";
 import { InputManager, type InputAction } from "@/core/InputManager";
@@ -16,12 +17,18 @@ import { AISystem } from "@/systems/AISystem";
 import { CombatSystem } from "@/systems/CombatSystem";
 import { MovementSystem } from "@/systems/MovementSystem";
 import { PlayerInputSystem } from "@/systems/PlayerInputSystem";
+import { RespawnSystem } from "@/systems/RespawnSystem";
+import { GameOverScreen } from "@/ui/GameOverScreen";
+import { HealthBarOverlay } from "@/ui/HealthBarOverlay";
 import { HUD } from "@/ui/HUD";
 import { LobbyScreen } from "@/ui/LobbyScreen";
 import { LaneType, Team, type PlayerState, type Vec3 } from "@/types";
 
 const SKILL_KEYS = ["q", "w", "e", "r"] as const;
 const PLAYER_NAME = "Guest";
+const TOWERS_DESTROYED_TO_END_MATCH = 6;
+const BOT_LANES = [LaneType.TOP, LaneType.MID, LaneType.BOT] as const;
+const BOT_HERO_IDS = ["shadowblade", "stormcaller", "ironclad"] as const;
 
 function getElement(id: string): HTMLElement {
   const element = document.getElementById(id);
@@ -54,21 +61,35 @@ const gameMap = new GameMap(engine.getScene());
 const input = InputManager.getInstance();
 input.configure(engine.getRenderer().domElement, engine.getCamera());
 
+const cameraController = new CameraController(engine.getCamera());
 const hud = new HUD();
 hud.mount(uiOverlay);
+const healthBarOverlay = new HealthBarOverlay(engine.getCamera(), engine.getRenderer());
+healthBarOverlay.mount(uiOverlay);
 const lobby = new LobbyScreen();
 lobby.mount(lobbyRoot);
+const gameOverScreen = new GameOverScreen();
+gameOverScreen.mount(uiOverlay);
 const network = new NetworkStub();
 const remoteHeroes = new Map<string, Hero>();
+const respawnSystem = new RespawnSystem();
 let localHero: Hero | null = null;
 let objectivesSpawned = false;
+let botsSpawned = false;
+let destroyedTowerCount = 0;
+let matchEnded = false;
 
 const laneManager = new LaneManager(gameMap, (entity) => engine.addEntity(entity));
 engine.addSystem(new PlayerInputSystem(input, () => localHero));
 engine.addSystem(new AISystem());
 engine.addSystem(new MovementSystem());
 engine.addSystem(new CombatSystem());
+engine.addSystem(respawnSystem);
 engine.addSystem(laneManager);
+engine.addFrameCallback((delta) => {
+  cameraController.update(delta);
+  healthBarOverlay.update(engine.getEntities());
+});
 
 function spawnObjectives(): void {
   if (objectivesSpawned) {
@@ -127,6 +148,25 @@ function addBotAI(hero: Hero, lane: LaneType): void {
   }
 }
 
+function spawnBots(): void {
+  if (botsSpawned) {
+    return;
+  }
+
+  botsSpawned = true;
+  for (let index = 0; index < BOT_LANES.length; index += 1) {
+    const lane = BOT_LANES[index];
+    const heroId = BOT_HERO_IDS[index] ?? BOT_HERO_IDS[0];
+    const spawnPoint = gameMap.getSpawnPoint(Team.RED).clone().add(new Vector3(index * 1.4, 0, -index * 1.4));
+    const botHero = createHero(heroId, Team.RED, spawnPoint);
+    addBotAI(botHero, lane);
+    respawnSystem.registerHero(botHero, spawnPoint);
+    remoteHeroes.set(botHero.id, botHero);
+    engine.addEntity(botHero);
+    useGameStore.getState().updatePlayer(createPlayer(botHero.id, heroId, Team.RED, `Bot ${index + 1}`, spawnPoint));
+  }
+}
+
 function useLocalSkill(index: number): void {
   if (!localHero) {
     return;
@@ -172,17 +212,20 @@ function handleInput(action: InputAction): void {
 
 function startMatch(heroId: string): void {
   spawnObjectives();
+  spawnBots();
   const spawnPoint = gameMap.getSpawnPoint(Team.BLUE);
   localHero = createHero(heroId, Team.BLUE, spawnPoint);
   engine.addEntity(localHero);
+  respawnSystem.registerHero(localHero, spawnPoint);
+  cameraController.setTarget(localHero);
   hud.setHero(localHero);
 
   const localPlayer = createPlayer(localHero.id, heroId, Team.BLUE, PLAYER_NAME, spawnPoint);
   useGameStore.getState().setLocalPlayer(localPlayer);
   useGameStore.getState().setMatchState("IN_GAME");
   lobby.hide();
+  gameOverScreen.hide();
   engine.start();
-  void network.connect(localPlayer);
 }
 
 function addRemotePlayer(player: PlayerState): void {
@@ -221,21 +264,61 @@ network.onPlayerMoved(updateRemoteMovement);
 eventBus.on("HERO_DIED", (event) => {
   const state = useGameStore.getState();
   const localPlayer = state.localPlayer;
-  if (!localPlayer || event.heroId !== localHero?.id) {
+  if (!localPlayer) {
     return;
   }
 
-  state.updatePlayer({
-    ...localPlayer,
-    deaths: localPlayer.deaths + 1
-  });
+  if (event.heroId === localHero?.id) {
+    state.updatePlayer({
+      ...localPlayer,
+      deaths: localPlayer.deaths + 1
+    });
+  }
+
+  if (event.killerId === localHero?.id) {
+    state.updatePlayer({
+      ...localPlayer,
+      kills: localPlayer.kills + 1
+    });
+  }
 });
 
 eventBus.on("TOWER_DESTROYED", (event) => {
+  if (matchEnded) {
+    return;
+  }
+
   const state = useGameStore.getState();
-  state.setScores({
+  const nextScores = {
     blue: event.team === Team.RED ? state.scores.blue + 1 : state.scores.blue,
     red: event.team === Team.BLUE ? state.scores.red + 1 : state.scores.red
+  };
+  state.setScores(nextScores);
+  destroyedTowerCount += 1;
+
+  if (destroyedTowerCount >= TOWERS_DESTROYED_TO_END_MATCH) {
+    const winner = event.team === Team.RED ? Team.BLUE : Team.RED;
+    eventBus.emit("MATCH_ENDED", {
+      winner,
+      reason: "Six towers destroyed"
+    });
+  }
+});
+
+eventBus.on("MATCH_ENDED", (event) => {
+  if (matchEnded) {
+    return;
+  }
+
+  matchEnded = true;
+  const state = useGameStore.getState();
+  const localPlayer = state.localPlayer;
+  state.setMatchState("ENDED");
+  gameOverScreen.show({
+    victory: event.winner === localPlayer?.team,
+    kills: localPlayer?.kills ?? 0,
+    deaths: localPlayer?.deaths ?? 0,
+    durationSeconds: state.matchTimer
   });
 });
 
@@ -244,3 +327,4 @@ window.addEventListener("resize", () => {
 });
 
 window.setInterval(updateHud, UI_CONFIG.hudRefreshMs);
+gameOverScreen.onPlayAgain(() => window.location.reload());

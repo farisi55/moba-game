@@ -104,7 +104,7 @@ export class CombatSystem implements System {
     }
 
     const lifecycle = target.getComponent<LifecycleComponent>("lifecycle");
-    if (lifecycle) {
+    if (lifecycle && targetIdentity?.kind !== "hero") {
       lifecycle.shouldDispose = true;
     }
 

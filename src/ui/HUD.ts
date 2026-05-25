@@ -217,6 +217,7 @@ export class HUD {
         color: var(--bb-text);
         pointer-events: none;
         font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        z-index: 3;
       }
 
       .bb-hud-top {

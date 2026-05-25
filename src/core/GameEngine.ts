@@ -13,6 +13,7 @@ import type { System } from "@/types";
 const FIXED_DELTA_SECONDS = 1 / 60;
 const MAX_FRAME_DELTA_SECONDS = 0.25;
 const MAX_DEVICE_PIXEL_RATIO = 2;
+type FrameCallback = (delta: number) => void;
 
 export class GameEngine {
   private renderer: WebGLRenderer | null;
@@ -20,6 +21,7 @@ export class GameEngine {
   private camera: OrthographicCamera | null;
   private readonly clock: Clock;
   private readonly systems: System[];
+  private readonly frameCallbacks: FrameCallback[];
   private readonly entities: Entity[];
   private readonly sceneManager: SceneManager;
   private readonly mountElement: HTMLElement;
@@ -33,6 +35,7 @@ export class GameEngine {
     this.camera = null;
     this.clock = new Clock(false);
     this.systems = [];
+    this.frameCallbacks = [];
     this.entities = [];
     this.sceneManager = new SceneManager();
     this.mountElement = mountElement;
@@ -88,6 +91,19 @@ export class GameEngine {
    */
   public addSystem(system: System): void {
     this.systems.push(system);
+  }
+
+  /**
+   * Adds a render-frame callback for visual controllers and DOM overlays.
+   */
+  public addFrameCallback(callback: FrameCallback): () => void {
+    this.frameCallbacks.push(callback);
+    return () => {
+      const index = this.frameCallbacks.indexOf(callback);
+      if (index >= 0) {
+        this.frameCallbacks.splice(index, 1);
+      }
+    };
   }
 
   /**
@@ -196,6 +212,10 @@ export class GameEngine {
     while (this.accumulator >= FIXED_DELTA_SECONDS) {
       this.loop(FIXED_DELTA_SECONDS);
       this.accumulator -= FIXED_DELTA_SECONDS;
+    }
+
+    for (const callback of this.frameCallbacks) {
+      callback(frameDelta);
     }
 
     this.getRenderer().render(this.getScene(), this.getCamera());

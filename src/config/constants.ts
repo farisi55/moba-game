@@ -12,7 +12,7 @@ export const COLORS = {
   redTeam: "#d64b4b",
   blueEmissive: "#123a91",
   redEmissive: "#741c1c",
-  gold: "#c7a96b",
+  gold: "#c9a84c",
   charcoal: "#11131f",
   navy: "#0e1326"
 } as const;
@@ -23,7 +23,7 @@ export const RENDERER_CONFIG = {
 } as const;
 
 export const CAMERA_CONFIG = {
-  frustumSize: 20,
+  frustumSize: 32,
   position: new Vector3(20, 20, 20),
   target: new Vector3(0, 0, 0),
   near: 0.1,
@@ -37,7 +37,12 @@ export const LIGHT_CONFIG = {
 } as const;
 
 export const FOG_CONFIG = {
-  density: 0.02
+  density: 0.008
+} as const;
+
+export const RESPAWN_CONFIG = {
+  heroRespawnSeconds: 8,
+  baseDamageToWin: true
 } as const;
 
 export const GAME_LOOP = {

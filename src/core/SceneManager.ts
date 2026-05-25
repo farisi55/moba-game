@@ -9,24 +9,11 @@ import {
   PCFSoftShadowMap,
   Scene,
   SRGBColorSpace,
-  Vector3,
   WebGLRenderer
 } from "three";
+import { CAMERA_CONFIG, COLORS, FOG_CONFIG, LIGHT_CONFIG, RENDERER_CONFIG } from "@/config/constants";
 
-const BACKGROUND_COLOR = "#0a0a1a";
-const AMBIENT_LIGHT_COLOR = "#1a1a3e";
-const DIRECTIONAL_LIGHT_COLOR = "#4466ff";
-const AMBIENT_LIGHT_INTENSITY = 0.5;
-const DIRECTIONAL_LIGHT_INTENSITY = 1.0;
-const FOG_DENSITY = 0.02;
-const FRUSTUM_SIZE = 20;
-const CAMERA_NEAR = 0.1;
-const CAMERA_FAR = 1000;
-const MAX_DEVICE_PIXEL_RATIO = 2;
-const SHADOW_MAP_SIZE = 2048;
-const CAMERA_POSITION = new Vector3(20, 20, 20);
-const CAMERA_TARGET = new Vector3(0, 0, 0);
-const DIRECTIONAL_LIGHT_POSITION = new Vector3(12, 24, 8);
+const FOGLESS_BACKGROUND_INTENSITY = 0.62;
 
 export class SceneManager {
   /**
@@ -34,17 +21,17 @@ export class SceneManager {
    */
   public createScene(): Scene {
     const scene = new Scene();
-    scene.background = new Color(BACKGROUND_COLOR);
-    scene.fog = new FogExp2(BACKGROUND_COLOR, FOG_DENSITY);
+    scene.background = new Color(COLORS.background);
+    scene.fog = new FogExp2(COLORS.background, FOG_CONFIG.density);
 
-    const ambientLight = new AmbientLight(AMBIENT_LIGHT_COLOR, AMBIENT_LIGHT_INTENSITY);
+    const ambientLight = new AmbientLight(COLORS.ambientLight, FOGLESS_BACKGROUND_INTENSITY);
     scene.add(ambientLight);
 
-    const directionalLight = new DirectionalLight(DIRECTIONAL_LIGHT_COLOR, DIRECTIONAL_LIGHT_INTENSITY);
-    directionalLight.position.copy(DIRECTIONAL_LIGHT_POSITION);
+    const directionalLight = new DirectionalLight(COLORS.directionalLight, LIGHT_CONFIG.directionalIntensity);
+    directionalLight.position.copy(LIGHT_CONFIG.directionalPosition);
     directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = SHADOW_MAP_SIZE;
-    directionalLight.shadow.mapSize.height = SHADOW_MAP_SIZE;
+    directionalLight.shadow.mapSize.width = RENDERER_CONFIG.shadowMapSize;
+    directionalLight.shadow.mapSize.height = RENDERER_CONFIG.shadowMapSize;
     scene.add(directionalLight);
 
     return scene;
@@ -56,15 +43,15 @@ export class SceneManager {
   public createCamera(width: number, height: number): OrthographicCamera {
     const aspect = width / height;
     const camera = new OrthographicCamera(
-      (FRUSTUM_SIZE * aspect) / -2,
-      (FRUSTUM_SIZE * aspect) / 2,
-      FRUSTUM_SIZE / 2,
-      FRUSTUM_SIZE / -2,
-      CAMERA_NEAR,
-      CAMERA_FAR
+      (CAMERA_CONFIG.frustumSize * aspect) / -2,
+      (CAMERA_CONFIG.frustumSize * aspect) / 2,
+      CAMERA_CONFIG.frustumSize / 2,
+      CAMERA_CONFIG.frustumSize / -2,
+      CAMERA_CONFIG.near,
+      CAMERA_CONFIG.far
     );
-    camera.position.copy(CAMERA_POSITION);
-    camera.lookAt(CAMERA_TARGET);
+    camera.position.copy(CAMERA_CONFIG.position);
+    camera.lookAt(CAMERA_CONFIG.target);
     return camera;
   }
 
@@ -76,7 +63,7 @@ export class SceneManager {
       canvas,
       antialias: true
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_DEVICE_PIXEL_RATIO));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, RENDERER_CONFIG.pixelRatioMax));
     renderer.setSize(width, height, false);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFSoftShadowMap;
@@ -90,10 +77,10 @@ export class SceneManager {
    */
   public resizeCamera(camera: OrthographicCamera, width: number, height: number): void {
     const aspect = width / height;
-    camera.left = (FRUSTUM_SIZE * aspect) / -2;
-    camera.right = (FRUSTUM_SIZE * aspect) / 2;
-    camera.top = FRUSTUM_SIZE / 2;
-    camera.bottom = FRUSTUM_SIZE / -2;
+    camera.left = (CAMERA_CONFIG.frustumSize * aspect) / -2;
+    camera.right = (CAMERA_CONFIG.frustumSize * aspect) / 2;
+    camera.top = CAMERA_CONFIG.frustumSize / 2;
+    camera.bottom = CAMERA_CONFIG.frustumSize / -2;
     camera.updateProjectionMatrix();
   }
 }
