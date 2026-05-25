@@ -13,8 +13,6 @@ import {
 } from "three";
 import { CAMERA_CONFIG, COLORS, FOG_CONFIG, LIGHT_CONFIG, RENDERER_CONFIG } from "@/config/constants";
 
-const FOGLESS_BACKGROUND_INTENSITY = 0.62;
-
 export class SceneManager {
   /**
    * Creates the dark fantasy Three.js scene with fog and lighting.
@@ -24,7 +22,7 @@ export class SceneManager {
     scene.background = new Color(COLORS.background);
     scene.fog = new FogExp2(COLORS.background, FOG_CONFIG.density);
 
-    const ambientLight = new AmbientLight(COLORS.ambientLight, FOGLESS_BACKGROUND_INTENSITY);
+    const ambientLight = new AmbientLight(COLORS.ambientLight, LIGHT_CONFIG.ambientIntensity);
     scene.add(ambientLight);
 
     const directionalLight = new DirectionalLight(COLORS.directionalLight, LIGHT_CONFIG.directionalIntensity);

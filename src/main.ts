@@ -19,10 +19,12 @@ import { CombatSystem } from "@/systems/CombatSystem";
 import { MovementSystem } from "@/systems/MovementSystem";
 import { PlayerInputSystem } from "@/systems/PlayerInputSystem";
 import { RespawnSystem } from "@/systems/RespawnSystem";
+import { ClickIndicator } from "@/ui/ClickIndicator";
 import { GameOverScreen } from "@/ui/GameOverScreen";
 import { HealthBarOverlay } from "@/ui/HealthBarOverlay";
 import { HUD } from "@/ui/HUD";
 import { LobbyScreen } from "@/ui/LobbyScreen";
+import { PlayerMarker } from "@/ui/PlayerMarker";
 import { LaneType, Team, type PlayerState, type Vec3 } from "@/types";
 
 const SKILL_KEYS = ["q", "w", "e", "r"] as const;
@@ -68,11 +70,14 @@ const cameraController = new CameraController(engine.getCamera());
 const respawnSystem = new RespawnSystem();
 const healthBarOverlay = new HealthBarOverlay(uiOverlay, engine.getCamera());
 const gameOverScreen = new GameOverScreen();
+const clickIndicator = new ClickIndicator(engine.getScene());
+const playerMarker = new PlayerMarker(engine.getScene());
 const remoteHeroes = new Map<string, Hero>();
 let localHero: Hero | null = null;
 let objectivesSpawned = false;
 
 const laneManager = new LaneManager(gameMap, (entity) => engine.addEntity(entity));
+engine.addSystem(cameraController);
 engine.addSystem(new PlayerInputSystem(input, () => localHero));
 engine.addSystem(new AISystem());
 engine.addSystem(new MovementSystem());
@@ -181,6 +186,7 @@ function handleInput(action: InputAction): void {
     const movement = localHero.getComponent<MovementComponent>("movement");
     if (movement) {
       movement.targetPosition = action.worldPosition.clone();
+      clickIndicator.show(action.worldPosition.x, action.worldPosition.z);
       network.sendPlayerInput({
         sequence: Math.floor(performance.now()),
         moveTarget: toVec3(action.worldPosition),
@@ -204,6 +210,9 @@ function startMatch(heroId: string): void {
   respawnSystem.registerHero(localHero, spawnPoint);
   spawnBots();
   hud.setHero(localHero);
+  if (localHero.mesh) {
+    playerMarker.attachTo(localHero.mesh);
+  }
 
   const localPlayer = createPlayer(localHero.id, heroId, Team.BLUE, PLAYER_NAME, spawnPoint);
   useGameStore.getState().setLocalPlayer(localPlayer);
@@ -238,8 +247,9 @@ function updateHud(): void {
   const state = useGameStore.getState();
   const localPlayer = state.localPlayer;
   hud.update(state.matchTimer, localPlayer?.kills ?? 0, localPlayer?.deaths ?? 0);
-  cameraController.update(UI_CONFIG.hudRefreshMs / TIME_CONFIG.millisecondsPerSecond);
   healthBarOverlay.update(engine.getEntities() as Entity[]);
+  playerMarker.update(UI_CONFIG.hudRefreshMs / TIME_CONFIG.millisecondsPerSecond);
+  clickIndicator.update(UI_CONFIG.hudRefreshMs / TIME_CONFIG.millisecondsPerSecond);
 }
 
 input.onAction(handleInput);

@@ -31,8 +31,8 @@ export const CAMERA_CONFIG = {
 } as const;
 
 export const LIGHT_CONFIG = {
-  ambientIntensity: 0.5,
-  directionalIntensity: 1,
+  ambientIntensity: 2.5,
+  directionalIntensity: 3.5,
   directionalPosition: new Vector3(12, 24, 8)
 } as const;
 
@@ -74,11 +74,11 @@ export const MAP_CONFIG = {
   baseWidth: 10,
   baseHeight: 1.2,
   baseDepth: 10,
-  baseOffset: 42,
-  laneVerticalOffset: 34,
-  laneBotOffset: -34,
+  baseOffset: 20,
+  laneVerticalOffset: 14,
+  laneBotOffset: -14,
   laneMidOffset: 0,
-  laneMidInnerOffset: 18
+  laneMidInnerOffset: 8
 } as const;
 
 export const ENTITY_CONFIG = {

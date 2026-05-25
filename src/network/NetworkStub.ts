@@ -30,8 +30,9 @@ export class NetworkStub {
    * Simulates connecting to the future authoritative WebSocket backend.
    */
   public async connect(localPlayer: PlayerState): Promise<void> {
-    console.log("[NetworkStub] connect", localPlayer);
-    this.joinTimer = window.setTimeout(() => this.emitFakeJoin(), UI_CONFIG.guestJoinDelayMs);
+    console.log("[NetworkStub] connect (stub — multiplayer deferred)", localPlayer);
+    // Fake join disabled: bots are managed by spawnBots() in main.ts
+    // this.joinTimer = window.setTimeout(() => this.emitFakeJoin(), UI_CONFIG.guestJoinDelayMs);
   }
 
   /**
